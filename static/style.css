@@ -608,3 +608,115 @@ body {
   .card-scene { height: 240px; }
   .front-word { font-size: 3.2rem; }
 }
+
+/* ── 語音控制列 ── */
+.tts-bar {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: .65rem 1rem;
+  margin-bottom: 1rem;
+  animation: fadeUp .3s ease both;
+}
+
+.tts-label {
+  font-size: .72rem;
+  color: var(--muted2);
+  white-space: nowrap;
+}
+
+.tts-select {
+  background: var(--surf2);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: .75rem;
+  padding: .3rem .5rem;
+  flex: 1;
+  min-width: 0;
+  max-width: 180px;
+  cursor: pointer;
+}
+
+.tts-range {
+  flex: 1;
+  min-width: 60px;
+  max-width: 90px;
+  accent-color: var(--ink);
+  cursor: pointer;
+}
+
+.tts-rate-label {
+  font-size: .72rem;
+  color: var(--ink2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+}
+
+.btn-tts-toggle {
+  background: var(--surf2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 1rem;
+  padding: .3rem .55rem;
+  cursor: pointer;
+  transition: all .2s;
+  line-height: 1;
+}
+.btn-tts-toggle:hover { border-color: var(--ink); }
+.btn-tts-toggle.tts-off { opacity: .45; }
+
+.btn-speak-manual {
+  background: rgba(123,108,246,.15);
+  border: 1px solid rgba(123,108,246,.3);
+  border-radius: 6px;
+  color: var(--ink2);
+  font-size: .75rem;
+  padding: .3rem .7rem;
+  cursor: pointer;
+  transition: all .2s;
+  white-space: nowrap;
+}
+.btn-speak-manual:hover { background: rgba(123,108,246,.28); }
+.btn-speak-manual.speaking { animation: pop .35s ease; }
+
+/* ── 語音按鈕列（翻面下方） ── */
+.speak-row {
+  display: flex;
+  gap: .6rem;
+  align-items: center;
+  margin-bottom: .8rem;
+}
+
+.btn-speak {
+  background: rgba(123,108,246,.12);
+  border: 1px solid rgba(123,108,246,.25);
+  border-radius: 8px;
+  color: var(--ink2);
+  font-size: .8rem;
+  padding: .45rem .9rem;
+  cursor: pointer;
+  transition: all .2s;
+  white-space: nowrap;
+}
+.btn-speak:hover { background: rgba(123,108,246,.25); border-color: var(--ink2); }
+
+.btn-peek {
+  flex: 1;
+  background: transparent;
+  border: 1.5px dashed rgba(255,255,255,.1);
+  border-radius: var(--radius-sm);
+  color: var(--muted2);
+  font-size: .85rem;
+  padding: .48rem .8rem;
+  cursor: pointer;
+  transition: all .2s;
+}
+.btn-peek:hover { border-color: var(--ink); color: var(--ink2); }
+.btn-peek.hidden { display: none; }

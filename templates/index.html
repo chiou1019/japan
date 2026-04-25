@@ -19,14 +19,25 @@
     <div class="header-right">
       <span class="n5-badge">N5</span>
       <div class="streak-display" id="streakDisplay" style="display:none">
-        <span class="streak-fire">🔥</span>
-        <span id="streakCount">0</span>
+        <span>🔥</span><span id="streakCount">0</span>
       </div>
+      <button class="btn-tts-toggle" id="btnTTS" onclick="toggleTTS()" title="語音：開">🔊</button>
     </div>
   </header>
 
+  <!-- 語音設定列 -->
+  <div class="tts-bar" id="ttsBar" style="display:none">
+    <span class="tts-label">語音</span>
+    <select class="tts-select" id="voiceSelect" onchange="onVoiceChange(this)"></select>
+    <span class="tts-label">語速</span>
+    <input class="tts-range" type="range" min="0.5" max="1.5" step="0.1" value="0.85"
+           oninput="onRateChange(this.value)">
+    <span id="rateLabel" class="tts-rate-label">0.85x</span>
+    <button class="btn-speak-manual" id="btnSpeak" onclick="speakCurrent()">▶ 再聽一次</button>
+  </div>
+
   <!-- Stats Bar -->
-  <div class="stats-bar" id="statsBar">
+  <div class="stats-bar">
     <div class="stat-pill known"><span id="statKnown">0</span><label>記住</label></div>
     <div class="stat-pill unknown"><span id="statUnknown">0</span><label>不會</label></div>
     <div class="stat-pill total"><span id="statTotal">0</span><label>總練習</label></div>
@@ -37,7 +48,7 @@
   <section class="screen" id="screenSetup">
     <div class="setup-card">
       <p class="setup-label">今天要練習幾個單字？</p>
-      <div class="count-grid" id="countGrid">
+      <div class="count-grid">
         <button class="cnt" data-n="5"   onclick="pickCount(this)">5</button>
         <button class="cnt" data-n="10"  onclick="pickCount(this)">10</button>
         <button class="cnt active" data-n="15" onclick="pickCount(this)">15</button>
@@ -56,15 +67,13 @@
   <!-- ── STUDY SCREEN ── -->
   <section class="screen" id="screenStudy" style="display:none">
 
-    <!-- Progress -->
     <div class="progress-row">
       <div class="prog-bar-bg"><div class="prog-bar-fill" id="progFill"></div></div>
       <span class="prog-label" id="progLabel">0 / 0</span>
     </div>
 
-    <!-- Queue info -->
     <div class="queue-row">
-      <span class="queue-info" id="queueInfo">剩餘 0 張</span>
+      <span id="queueInfo">剩餘 0 張</span>
       <div class="queue-tags">
         <span class="tag tag-review" id="tagReview">🔄 複習 0</span>
         <span class="tag tag-new"    id="tagNew">✦ 新字 0</span>
@@ -75,7 +84,6 @@
     <div class="card-scene">
       <div class="card" id="card" onclick="flipCard()">
 
-        <!-- FRONT -->
         <div class="card-face card-front">
           <div class="card-corner top-left">N5</div>
           <div class="card-corner top-right" id="levelStars"></div>
@@ -84,7 +92,6 @@
           <div class="card-corner bottom-right" id="frontNum"></div>
         </div>
 
-        <!-- BACK -->
         <div class="card-face card-back">
           <div class="card-corner top-left" style="opacity:.4">答え</div>
           <div class="back-reading" id="backReading"></div>
@@ -96,11 +103,19 @@
       </div>
     </div>
 
-    <!-- Flip hint -->
-    <button class="btn-peek" id="btnPeek" onclick="flipCard()">👁 翻面查看答案</button>
+    <!-- 語音按鈕列 -->
+    <div class="speak-row">
+      <button class="btn-speak" onclick="speak(current && current.word)" title="朗讀單字">
+        🔊 單字
+      </button>
+      <button class="btn-speak" onclick="speak(current && current.hiragana)" title="朗讀假名">
+        🔊 假名
+      </button>
+      <button class="btn-peek" id="btnPeek" onclick="flipCard()">👁 翻面查看答案</button>
+    </div>
 
     <!-- Action buttons -->
-    <div class="action-row" id="actionRow">
+    <div class="action-row">
       <button class="action-btn btn-unknown" id="btnUnknown" onclick="markUnknown()" disabled>
         <span class="act-icon">✗</span>
         <span class="act-label">還不會</span>
@@ -121,7 +136,6 @@
       <div class="complete-kanji">完了</div>
       <h2 class="complete-title">練習完成！</h2>
       <p class="complete-sub" id="completeSub"></p>
-
       <div class="result-grid">
         <div class="result-box known">
           <div class="res-num" id="resKnown">0</div>
@@ -140,7 +154,6 @@
           <div class="res-label">正確率</div>
         </div>
       </div>
-
       <div class="complete-btns">
         <button class="btn-retry" id="btnRetry" onclick="retryUnknown()">🔄 只練「還不會」的</button>
         <button class="btn-restart" onclick="backToSetup()">← 重新選擇</button>
@@ -151,5 +164,18 @@
 </div>
 
 <script src="{{ url_for('static', filename='script.js') }}"></script>
+<script>
+  // 進入學習畫面時顯示語音列
+  const _origStart = startLearning;
+  startLearning = function() {
+    document.getElementById('ttsBar').style.display = 'flex';
+    _origStart();
+  };
+  const _origBack = backToSetup;
+  backToSetup = function() {
+    document.getElementById('ttsBar').style.display = 'none';
+    _origBack();
+  };
+</script>
 </body>
 </html>

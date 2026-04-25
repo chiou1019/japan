@@ -1,0 +1,6 @@
+git push -f japan main //直接覆蓋檔案到github上
+git remote -v 查看現在分支名稱
+git branch 查看現在分支
+git add . 加入現有檔案
+git status  查看現今狀態
+git push 連結(japan) 分支(main)
