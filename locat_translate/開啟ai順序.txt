@@ -1,0 +1,14 @@
+https://tooomm.github.io/github-release-stats/?username=conda-forge&repository=miniforge   下載Miniforge3-Windows-x86_64.exe
+記得勾選
+Create shortcuts（已經勾了 👍）
+Register Miniforge3 as default Python 3.13
+
+Crtl+`打開cmd
+輸入 cmd /K C:\Users\ycchi\miniforge3\Scripts\activate.bat
+conda create -n vllm-env python=3.11 -y
+conda activate vllm-env
+
+
+
+改用Gemini API Key 
+https://aistudio.google.com/api-keys?project=gen-lang-client-0111897785去這裡看

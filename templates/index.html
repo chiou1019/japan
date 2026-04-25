@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>日文 N5 單字學習</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700;900&family=Shippori+Mincho:wght@400;700;800&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="ink-bg"></div>
+
+<div class="app">
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="header-kana">日本語</div>
+    <div class="header-right">
+      <span class="n5-badge">N5</span>
+      <div class="streak-display" id="streakDisplay" style="display:none">
+        <span class="streak-fire">🔥</span>
+        <span id="streakCount">0</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Stats Bar -->
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-pill known"><span id="statKnown">0</span><label>記住</label></div>
+    <div class="stat-pill unknown"><span id="statUnknown">0</span><label>不會</label></div>
+    <div class="stat-pill total"><span id="statTotal">0</span><label>總練習</label></div>
+    <div class="stat-pill rate"><span id="statRate">—</span><label>正確率</label></div>
+  </div>
+
+  <!-- ── SETUP SCREEN ── -->
+  <section class="screen" id="screenSetup">
+    <div class="setup-card">
+      <p class="setup-label">今天要練習幾個單字？</p>
+      <div class="count-grid" id="countGrid">
+        <button class="cnt" data-n="5"   onclick="pickCount(this)">5</button>
+        <button class="cnt" data-n="10"  onclick="pickCount(this)">10</button>
+        <button class="cnt active" data-n="15" onclick="pickCount(this)">15</button>
+        <button class="cnt" data-n="20"  onclick="pickCount(this)">20</button>
+        <button class="cnt" data-n="30"  onclick="pickCount(this)">30</button>
+        <button class="cnt" data-n="40"  onclick="pickCount(this)">40</button>
+        <button class="cnt" data-n="50"  onclick="pickCount(this)">50</button>
+        <button class="cnt" data-n="70"  onclick="pickCount(this)">70</button>
+        <button class="cnt" data-n="100" onclick="pickCount(this)">100</button>
+        <button class="cnt" data-n="200" onclick="pickCount(this)">200</button>
+      </div>
+      <button class="btn-start" onclick="startLearning()">開始學習</button>
+    </div>
+  </section>
+
+  <!-- ── STUDY SCREEN ── -->
+  <section class="screen" id="screenStudy" style="display:none">
+
+    <!-- Progress -->
+    <div class="progress-row">
+      <div class="prog-bar-bg"><div class="prog-bar-fill" id="progFill"></div></div>
+      <span class="prog-label" id="progLabel">0 / 0</span>
+    </div>
+
+    <!-- Queue info -->
+    <div class="queue-row">
+      <span class="queue-info" id="queueInfo">剩餘 0 張</span>
+      <div class="queue-tags">
+        <span class="tag tag-review" id="tagReview">🔄 複習 0</span>
+        <span class="tag tag-new"    id="tagNew">✦ 新字 0</span>
+      </div>
+    </div>
+
+    <!-- Flashcard -->
+    <div class="card-scene">
+      <div class="card" id="card" onclick="flipCard()">
+
+        <!-- FRONT -->
+        <div class="card-face card-front">
+          <div class="card-corner top-left">N5</div>
+          <div class="card-corner top-right" id="levelStars"></div>
+          <div class="front-word" id="frontWord">—</div>
+          <div class="front-hint">クリックして答えを見る</div>
+          <div class="card-corner bottom-right" id="frontNum"></div>
+        </div>
+
+        <!-- BACK -->
+        <div class="card-face card-back">
+          <div class="card-corner top-left" style="opacity:.4">答え</div>
+          <div class="back-reading" id="backReading"></div>
+          <div class="back-divider"></div>
+          <div class="back-meaning" id="backMeaning"></div>
+          <div class="back-word-echo" id="backEcho"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Flip hint -->
+    <button class="btn-peek" id="btnPeek" onclick="flipCard()">👁 翻面查看答案</button>
+
+    <!-- Action buttons -->
+    <div class="action-row" id="actionRow">
+      <button class="action-btn btn-unknown" id="btnUnknown" onclick="markUnknown()" disabled>
+        <span class="act-icon">✗</span>
+        <span class="act-label">還不會</span>
+        <span class="act-sub">立刻重新練習</span>
+      </button>
+      <button class="action-btn btn-known" id="btnKnown" onclick="markKnown()" disabled>
+        <span class="act-icon">✓</span>
+        <span class="act-label">記住了！</span>
+        <span class="act-sub">稍後再複習</span>
+      </button>
+    </div>
+
+  </section>
+
+  <!-- ── COMPLETE SCREEN ── -->
+  <section class="screen" id="screenComplete" style="display:none">
+    <div class="complete-wrap">
+      <div class="complete-kanji">完了</div>
+      <h2 class="complete-title">練習完成！</h2>
+      <p class="complete-sub" id="completeSub"></p>
+
+      <div class="result-grid">
+        <div class="result-box known">
+          <div class="res-num" id="resKnown">0</div>
+          <div class="res-label">✓ 記住了</div>
+        </div>
+        <div class="result-box unknown">
+          <div class="res-num" id="resUnknown">0</div>
+          <div class="res-label">✗ 還不會</div>
+        </div>
+        <div class="result-box streak">
+          <div class="res-num" id="resStreak">0</div>
+          <div class="res-label">🔥 最長連勝</div>
+        </div>
+        <div class="result-box rate">
+          <div class="res-num" id="resRate">—</div>
+          <div class="res-label">正確率</div>
+        </div>
+      </div>
+
+      <div class="complete-btns">
+        <button class="btn-retry" id="btnRetry" onclick="retryUnknown()">🔄 只練「還不會」的</button>
+        <button class="btn-restart" onclick="backToSetup()">← 重新選擇</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
