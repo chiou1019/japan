@@ -1,61 +1,62 @@
 // ============================================================
-// N5 單字學習系統 — 間隔重複 + 語音朗讀
+// N5 單字學習系統 v3 — 修正版
+//
+// 核心邏輯：
+//   - 每次練習只練「今天選的 N 個單字」，練完就結束
+//   - 記住了 → 當天不再出現（從 session 移除）
+//   - 還不會 → 暫存到 unknownList，本次 session 不再出現
+//             下次開始練習時才會重新加入
+//   - session 結束條件：所有單字都按過「記住了」
 // ============================================================
 
 // ── 狀態 ──
-let allWords = [];
-let queue = [];
+let sessionWords = []; // 本次要練習的單字（固定 N 個）
+let remainQueue = []; // 還沒練到的（記住了就移除）
+let unknownList = []; // 點了「還不會」的（本次不再出現）
 let current = null;
 let isFlipped = false;
 let selectedCount = 15;
 
+// Session 統計
 let sesKnown = 0;
 let sesUnknown = 0;
 let sesStreak = 0;
 let sesMaxStreak = 0;
 
+// 全域累積
 let gStats = JSON.parse(
   localStorage.getItem("n5_gstats") || '{"known":0,"unknown":0,"total":0}',
 );
 
-// ── 語音設定 ──
-let ttsEnabled = true; // 預設開啟
-let ttsVoice = null; // 選定的日文語音
-let ttsRate = 0.85; // 語速（0.5～2.0）
+// ── 語音 ──
+let ttsEnabled = true;
+let ttsVoice = null;
+let ttsRate = 0.85;
 
 function initTTS() {
   if (!window.speechSynthesis) return;
-
-  const loadVoices = () => {
+  const load = () => {
     const voices = speechSynthesis.getVoices();
-    // 優先找日文語音
     ttsVoice =
       voices.find((v) => v.lang === "ja-JP" && v.localService) ||
       voices.find((v) => v.lang === "ja-JP") ||
       voices.find((v) => v.lang.startsWith("ja")) ||
       null;
 
-    // 填入語音選單
     const sel = document.getElementById("voiceSelect");
     if (!sel) return;
-    const jaVoices = voices.filter((v) => v.lang.startsWith("ja"));
-    sel.innerHTML = jaVoices
-      .map((v, i) => `<option value="${i}">${v.name}</option>`)
-      .join("");
-
-    if (!jaVoices.length) {
-      sel.innerHTML = "<option>（無日文語音）</option>";
-    }
+    const ja = voices.filter((v) => v.lang.startsWith("ja"));
+    sel.innerHTML = ja.length
+      ? ja.map((v, i) => `<option value="${i}">${v.name}</option>`).join("")
+      : "<option>（無日文語音）</option>";
   };
-
-  loadVoices();
-  speechSynthesis.onvoiceschanged = loadVoices;
+  load();
+  speechSynthesis.onvoiceschanged = load;
 }
 
 function speak(text) {
-  if (!ttsEnabled || !window.speechSynthesis) return;
+  if (!ttsEnabled || !window.speechSynthesis || !text) return;
   speechSynthesis.cancel();
-
   const utt = new SpeechSynthesisUtterance(text);
   utt.lang = "ja-JP";
   utt.rate = ttsRate;
@@ -63,7 +64,6 @@ function speak(text) {
   speechSynthesis.speak(utt);
 }
 
-// 切換語音開關
 function toggleTTS() {
   ttsEnabled = !ttsEnabled;
   const btn = document.getElementById("btnTTS");
@@ -72,28 +72,15 @@ function toggleTTS() {
   btn.textContent = ttsEnabled ? "🔊" : "🔇";
 }
 
-// 手動朗讀當前單字
-function speakCurrent() {
-  if (!current) return;
-  speak(current.word);
-  // 按鈕動畫
-  const btn = document.getElementById("btnSpeak");
-  btn.classList.add("speaking");
-  setTimeout(() => btn.classList.remove("speaking"), 700);
-}
-
-// 語音選單變更
 function onVoiceChange(sel) {
-  const voices = speechSynthesis
-    .getVoices()
-    .filter((v) => v.lang.startsWith("ja"));
-  ttsVoice = voices[parseInt(sel.value)] || null;
+  const ja = speechSynthesis.getVoices().filter((v) => v.lang.startsWith("ja"));
+  ttsVoice = ja[parseInt(sel.value)] || null;
 }
 
-// 語速變更
 function onRateChange(val) {
   ttsRate = parseFloat(val);
-  document.getElementById("rateLabel").textContent = val + "x";
+  document.getElementById("rateLabel").textContent =
+    parseFloat(val).toFixed(1) + "x";
 }
 
 // ── 選擇數量 ──
@@ -108,41 +95,40 @@ function pickCount(el) {
 // ── 開始學習 ──
 function startLearning() {
   showScreen("screenStudy");
+  document.getElementById("ttsBar").style.display = "flex";
   resetSession();
 
   fetch(`/daily/${selectedCount}`)
     .then((r) => r.json())
     .then((data) => {
-      allWords = data;
-      queue = data.map((w) => ({ ...w, level: 0, dueIn: 0 }));
+      sessionWords = data;
+      remainQueue = [...data]; // 全部放入隊列
+      unknownList = [];
       nextCard();
     })
-    .catch(() => alert("載入失敗，請確認伺服器是否運行中"));
+    .catch(() => alert("載入失敗，請確認 Flask 伺服器是否運行中"));
 }
 
 function resetSession() {
   sesKnown = sesUnknown = sesStreak = sesMaxStreak = 0;
   updateStatsBar();
+  updateStreakDisplay();
 }
 
 // ── 下一張 ──
 function nextCard() {
-  let idx = queue.findIndex((w) => w.dueIn <= 0);
-  if (idx === -1) {
-    queue.forEach((w) => (w.dueIn = Math.max(0, w.dueIn - 1)));
-    idx = queue.findIndex((w) => w.dueIn <= 0);
-    if (idx === -1) {
-      showComplete();
-      return;
-    }
+  // ✅ 結束條件：remainQueue 空了 = 全部記住
+  if (remainQueue.length === 0) {
+    showComplete();
+    return;
   }
 
-  current = queue.splice(idx, 1)[0];
+  // 從 remainQueue 取出第一張
+  current = remainQueue.shift();
   renderCard(current);
   updateProgress();
-  updateQueueTags();
+  updateQueueInfo();
 
-  // 自動朗讀正面單字
   if (ttsEnabled) speak(current.word);
 }
 
@@ -150,17 +136,12 @@ function nextCard() {
 function renderCard(w) {
   isFlipped = false;
   document.getElementById("card").classList.remove("flipped");
-
   document.getElementById("frontWord").textContent = w.word;
   document.getElementById("backReading").textContent = w.hiragana;
   document.getElementById("backMeaning").textContent = w.meaning;
   document.getElementById("backEcho").textContent = w.word;
   document.getElementById("frontNum").textContent =
-    `${queue.length + 1} 張剩餘`;
-
-  const stars = "★".repeat(w.level) + "☆".repeat(5 - w.level);
-  document.getElementById("levelStars").textContent = stars;
-
+    `${remainQueue.length} 張剩餘`;
   setActionBtns(false);
   document.getElementById("btnPeek").classList.remove("hidden");
 }
@@ -170,84 +151,62 @@ function flipCard() {
   if (!current) return;
   isFlipped = !isFlipped;
   document.getElementById("card").classList.toggle("flipped", isFlipped);
-
   if (isFlipped) {
     setActionBtns(true);
     document.getElementById("btnPeek").classList.add("hidden");
-    // 翻面時朗讀假名
     if (ttsEnabled) speak(current.hiragana);
   }
 }
 
-// ── 記住了 ──
+// ── 記住了 → 移除，不再出現 ──
 function markKnown() {
   sesKnown++;
   sesStreak++;
   sesMaxStreak = Math.max(sesMaxStreak, sesStreak);
   gStats.known++;
   gStats.total++;
-
-  current.level = Math.min(current.level + 1, 5);
-
-  if (current.level < 5) {
-    const delay = Math.pow(2, current.level);
-    current.dueIn = delay;
-    const insertAt = Math.min(delay, queue.length);
-    queue.splice(insertAt, 0, current);
-    queue.forEach((w, i) => {
-      if (i !== insertAt) w.dueIn = Math.max(0, w.dueIn - 1);
-    });
-  }
+  saveGStats();
 
   animCard("anim-pop", "anim-glow-green");
   updateStatsBar();
   updateStreakDisplay();
-  saveGStats();
 
-  setTimeout(() => {
-    if (queue.length === 0) {
-      showComplete();
-      return;
-    }
-    nextCard();
-  }, 280);
+  // ✅ 不放回 remainQueue，直接結束這張
+  setTimeout(() => nextCard(), 280);
 }
 
-// ── 還不會 ──
+// ── 還不會 → 暫存，本次不再出現 ──
 function markUnknown() {
   sesUnknown++;
   sesStreak = 0;
   gStats.unknown++;
   gStats.total++;
+  saveGStats();
 
-  current.level = 0;
-  current.dueIn = 0;
-
-  queue.unshift(current);
-  queue.slice(1).forEach((w) => (w.dueIn = Math.max(0, w.dueIn - 1)));
+  // ✅ 存到 unknownList，不放回 remainQueue
+  unknownList.push(current);
 
   animCard("anim-shake", "anim-glow-red");
   updateStatsBar();
   updateStreakDisplay();
-  saveGStats();
 
-  setTimeout(nextCard, 320);
+  setTimeout(() => nextCard(), 320);
 }
 
-// ── 只練還不會 ──
+// ── 只練還不會的（下一輪） ──
 function retryUnknown() {
-  const unknowns = allWords.filter((w) => {
-    const inQ = queue.find((q) => q.word === w.word);
-    return inQ ? inQ.level === 0 : false;
-  });
-  const retry = unknowns.length > 0 ? unknowns : allWords;
-  queue = retry.map((w) => ({ ...w, level: 0, dueIn: 0 }));
+  if (unknownList.length === 0) return;
+  sessionWords = [...unknownList];
+  remainQueue = [...unknownList];
+  unknownList = [];
   showScreen("screenStudy");
+  document.getElementById("ttsBar").style.display = "flex";
   resetSession();
   nextCard();
 }
 
 function backToSetup() {
+  document.getElementById("ttsBar").style.display = "none";
   showScreen("screenSetup");
 }
 
@@ -255,6 +214,7 @@ function backToSetup() {
 function showComplete() {
   saveGStats();
   showScreen("screenComplete");
+
   const total = sesKnown + sesUnknown;
   const rate = total > 0 ? Math.round((sesKnown / total) * 100) : 0;
 
@@ -265,27 +225,31 @@ function showComplete() {
   document.getElementById("completeSub").textContent =
     `共練習 ${total} 次，正確率 ${rate}%`;
 
-  const hasUnknown = queue.some((w) => w.level === 0);
-  document.getElementById("btnRetry").style.display = hasUnknown ? "" : "none";
+  // 有還不會的才顯示重練按鈕
+  document.getElementById("btnRetry").style.display =
+    unknownList.length > 0 ? "" : "none";
+  document.getElementById("unknownCount").textContent =
+    unknownList.length > 0 ? `（${unknownList.length} 個）` : "";
 }
 
-// ── Progress ──
+// ── 進度條 ──
 function updateProgress() {
-  const pct = Math.min((sesKnown / selectedCount) * 100, 100);
+  const total = sessionWords.length;
+  const done = sesKnown;
+  const pct = total > 0 ? Math.min((done / total) * 100, 100) : 0;
   document.getElementById("progFill").style.width = pct + "%";
-  document.getElementById("progLabel").textContent =
-    `${sesKnown} / ${selectedCount}`;
+  document.getElementById("progLabel").textContent = `${done} / ${total}`;
+}
+
+function updateQueueInfo() {
   document.getElementById("queueInfo").textContent =
-    `剩餘 ${queue.length + 1} 張`;
+    `剩餘 ${remainQueue.length} 張`;
+  document.getElementById("tagUnknown").textContent =
+    `⚠ 待複習 ${unknownList.length}`;
+  document.getElementById("tagDone").textContent = `✓ 完成 ${sesKnown}`;
 }
 
-function updateQueueTags() {
-  const reviews = queue.filter((w) => w.level > 0).length;
-  const news = queue.filter((w) => w.level === 0).length;
-  document.getElementById("tagReview").textContent = `🔄 複習 ${reviews}`;
-  document.getElementById("tagNew").textContent = `✦ 新字 ${news}`;
-}
-
+// ── Stats ──
 function updateStatsBar() {
   const total = sesKnown + sesUnknown;
   const rate = total > 0 ? Math.round((sesKnown / total) * 100) + "%" : "—";

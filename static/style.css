@@ -720,3 +720,8 @@ body {
 }
 .btn-peek:hover { border-color: var(--ink); color: var(--ink2); }
 .btn-peek.hidden { display: none; }
+
+/* ── 修正版 tag 樣式 ── */
+.tag-unknown { background: rgba(224,92,106,.12); color: var(--red);   border: 1px solid rgba(224,92,106,.2); }
+.tag-done    { background: rgba(78,203,130,.12);  color: var(--green); border: 1px solid rgba(78,203,130,.2); }
+.queue-info-text { font-size: .78rem; color: var(--muted2); }
