@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-TW" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,7 +8,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700;900&family=Shippori+Mincho:wght@400;700;800&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-
 <div class="ink-bg"></div>
 <div class="app">
 
@@ -20,7 +19,13 @@
       <div class="streak-display" id="streakDisplay" style="display:none">
         <span>🔥</span><span id="streakCount">0</span>
       </div>
-      <button class="btn-tts-toggle" id="btnTTS" onclick="toggleTTS()" title="語音：開">🔊</button>
+      <div class="user-info" id="userInfo" style="display:none">
+        <span class="user-name" id="userName"></span>
+        <button class="btn-logout" onclick="logout()">登出</button>
+      </div>
+      <!-- 主題切換 -->
+      <button class="btn-theme" id="btnTheme" onclick="toggleTheme()" title="切換主題">🌙</button>
+      <button class="btn-tts-toggle" id="btnTTS" onclick="toggleTTS()" title="語音開關">🔊</button>
     </div>
   </header>
 
@@ -29,10 +34,8 @@
     <span class="tts-label">語音</span>
     <select class="tts-select" id="voiceSelect" onchange="onVoiceChange(this)"></select>
     <span class="tts-label">語速</span>
-    <input class="tts-range" type="range" min="0.5" max="1.5" step="0.1" value="0.85"
-           oninput="onRateChange(this.value)">
+    <input class="tts-range" type="range" min="0.5" max="1.5" step="0.1" value="0.85" oninput="onRateChange(this.value)">
     <span id="rateLabel" class="tts-rate-label">0.85x</span>
-    <button class="btn-speak-manual" onclick="speak(current && current.word)">▶ 再聽一次</button>
   </div>
 
   <!-- Stats Bar -->
@@ -43,34 +46,124 @@
     <div class="stat-pill rate"><span id="statRate">—</span><label>正確率</label></div>
   </div>
 
-  <!-- ── SETUP ── -->
-  <section class="screen" id="screenSetup">
-    <div class="setup-card">
-      <p class="setup-label">今天要練習幾個單字？</p>
-      <div class="count-grid">
-        <button class="cnt" data-n="5"   onclick="pickCount(this)">5</button>
-        <button class="cnt" data-n="10"  onclick="pickCount(this)">10</button>
-        <button class="cnt active" data-n="15" onclick="pickCount(this)">15</button>
-        <button class="cnt" data-n="20"  onclick="pickCount(this)">20</button>
-        <button class="cnt" data-n="30"  onclick="pickCount(this)">30</button>
-        <button class="cnt" data-n="40"  onclick="pickCount(this)">40</button>
-        <button class="cnt" data-n="50"  onclick="pickCount(this)">50</button>
-        <button class="cnt" data-n="70"  onclick="pickCount(this)">70</button>
-        <button class="cnt" data-n="100" onclick="pickCount(this)">100</button>
-        <button class="cnt" data-n="200" onclick="pickCount(this)">200</button>
+  <!-- ── 登入畫面 ── -->
+  <section class="screen" id="screenLogin">
+    <div class="login-card">
+      <div class="login-kana">ようこそ</div>
+      <h2 class="login-title">歡迎回來</h2>
+      <p class="login-sub">登入以記錄你的學習進度</p>
+      <div class="tab-row">
+        <button class="tab-btn active" id="tabLogin" onclick="switchTab('login')">登入</button>
+        <button class="tab-btn" id="tabRegister" onclick="switchTab('register')">註冊</button>
       </div>
-      <button class="btn-start" onclick="startLearning()">開始學習</button>
+      <div id="loginForm">
+        <div class="field-group">
+          <label class="field-label">帳號</label>
+          <input class="field-input" id="loginUser" type="text" placeholder="輸入帳號" autocomplete="username">
+        </div>
+        <div class="field-group">
+          <label class="field-label">密碼</label>
+          <input class="field-input" id="loginPass" type="password" placeholder="輸入密碼" autocomplete="current-password">
+        </div>
+        <div class="login-error" id="loginError"></div>
+        <button class="btn-login-submit" onclick="doLogin()">登入</button>
+        <button class="btn-guest" onclick="continueAsGuest()">不登入，以訪客繼續 →</button>
+      </div>
+      <div id="registerForm" style="display:none">
+        <div class="field-group">
+          <label class="field-label">帳號</label>
+          <input class="field-input" id="regUser" type="text" placeholder="設定帳號（至少 2 字）" autocomplete="username">
+        </div>
+        <div class="field-group">
+          <label class="field-label">密碼</label>
+          <input class="field-input" id="regPass" type="password" placeholder="設定密碼（至少 4 字）" autocomplete="new-password">
+        </div>
+        <div class="login-error" id="registerError"></div>
+        <button class="btn-login-submit" onclick="doRegister()">建立帳號</button>
+        <button class="btn-guest" onclick="continueAsGuest()">不登入，以訪客繼續 →</button>
+      </div>
     </div>
   </section>
 
-  <!-- ── STUDY ── -->
+  <!-- ── 主選單 ── -->
+  <section class="screen" id="screenSetup" style="display:none">
+
+    <!-- 進度摘要（登入後顯示） -->
+    <div class="user-progress" id="userProgress" style="display:none">
+      <div class="prog-summary">
+        <div class="prog-item"><span class="prog-num green" id="progKnown">0</span><span class="prog-lbl">已記住</span></div>
+        <div class="prog-item"><span class="prog-num red"   id="progUnknown">0</span><span class="prog-lbl">還不會</span></div>
+        <div class="prog-item"><span class="prog-num muted" id="progNew">0</span><span class="prog-lbl">未練習</span></div>
+        <div class="prog-item"><span class="prog-num ink"   id="progTotal">670</span><span class="prog-lbl">總單字</span></div>
+      </div>
+      <div class="overall-bar-bg">
+        <div class="overall-bar-known"   id="overallKnown"></div>
+        <div class="overall-bar-unknown" id="overallUnknown"></div>
+      </div>
+    </div>
+
+    <!-- 已學單字 + 不熟單字 兩張卡片 -->
+    <div class="word-panels" id="wordPanels" style="display:none">
+
+      <!-- 已學單字卡 -->
+      <div class="word-panel">
+        <div class="panel-header">
+          <div class="panel-title-row">
+            <span class="panel-icon">✓</span>
+            <span class="panel-title">已記住的單字</span>
+            <span class="panel-badge known-badge" id="knownBadgeCount">0</span>
+          </div>
+          <button class="panel-toggle" onclick="togglePanel('knownPanel', this)">展開 ▾</button>
+        </div>
+        <div class="panel-body" id="knownPanel" style="display:none">
+          <div class="word-grid" id="knownWordGrid"></div>
+        </div>
+      </div>
+
+      <!-- 不熟單字卡 -->
+      <div class="word-panel">
+        <div class="panel-header">
+          <div class="panel-title-row">
+            <span class="panel-icon warn">⚠</span>
+            <span class="panel-title">還不熟的單字</span>
+            <span class="panel-badge unknown-badge" id="unknownBadgeCount">0</span>
+          </div>
+          <button class="panel-toggle" onclick="togglePanel('unknownPanel', this)">展開 ▾</button>
+        </div>
+        <div class="panel-body" id="unknownPanel" style="display:none">
+          <div class="word-grid" id="unknownWordGrid"></div>
+          <button class="btn-practice-unknown" id="btnPracticeUnknown" onclick="startUnknownPractice()" style="display:none">
+            ▶ 開始練習這些單字
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 選擇練習數量 -->
+    <div class="setup-card">
+      <p class="setup-label">今天要練習幾個單字？</p>
+      <div class="count-list">
+        <button class="cnt-wide" data-n="5"   onclick="pickCount(this)">5 個</button>
+        <button class="cnt-wide" data-n="10"  onclick="pickCount(this)">10 個</button>
+        <button class="cnt-wide active" data-n="15" onclick="pickCount(this)">15 個</button>
+        <button class="cnt-wide" data-n="30"  onclick="pickCount(this)">30 個</button>
+        <button class="cnt-wide" data-n="50"  onclick="pickCount(this)">50 個</button>
+        <button class="cnt-wide" data-n="100" onclick="pickCount(this)">100 個</button>
+        <button class="cnt-wide" data-n="200" onclick="pickCount(this)">200 個</button>
+      </div>
+      <button class="btn-start" onclick="startLearning()">開始練習 →</button>
+    </div>
+
+  </section>
+
+  <!-- ── 學習畫面 ── -->
   <section class="screen" id="screenStudy" style="display:none">
 
     <div class="progress-row">
       <div class="prog-bar-bg"><div class="prog-bar-fill" id="progFill"></div></div>
       <span class="prog-label" id="progLabel">0 / 0</span>
     </div>
-
     <div class="queue-row">
       <span id="queueInfo" class="queue-info-text">剩餘 0 張</span>
       <div class="queue-tags">
@@ -79,77 +172,91 @@
       </div>
     </div>
 
-    <!-- Card -->
-    <div class="card-scene">
-      <div class="card" id="card" onclick="flipCard()">
-        <div class="card-face card-front">
-          <div class="card-corner top-left">N5</div>
-          <div class="front-word" id="frontWord">—</div>
-          <div class="front-hint">クリックして答えを見る</div>
-          <div class="card-corner bottom-right" id="frontNum"></div>
+    <div class="study-layout">
+      <!-- 左：閃卡 -->
+      <div class="card-col">
+        <div class="card-scene">
+          <div class="card" id="card">
+            <div class="card-front-only">
+              <div class="card-corner top-left">N5</div>
+              <div class="card-corner bottom-right" id="frontNum"></div>
+              <button class="word-speak-btn" id="btnSpeakWord" onclick="speakWord()">
+                <span class="front-word" id="frontWord">—</span>
+                <span class="speak-icon">🔊 點擊發音</span>
+              </button>
+            </div>
+          </div>
         </div>
-        <div class="card-face card-back">
-          <div class="card-corner top-left" style="opacity:.4">答え</div>
-          <div class="back-reading" id="backReading"></div>
-          <div class="back-divider"></div>
-          <div class="back-meaning" id="backMeaning"></div>
-          <div class="back-word-echo" id="backEcho"></div>
+        <div class="reveal-row">
+          <button class="btn-reveal reading" id="btnRevealReading" onclick="revealReading()">👁 顯示假名</button>
+          <button class="btn-reveal meaning" id="btnRevealMeaning" onclick="revealMeaning()">👁 顯示中文</button>
+        </div>
+        <div class="reveal-display">
+          <div class="reveal-item reading-item" id="revealReading"></div>
+          <div class="reveal-sep" id="revealSep"></div>
+          <div class="reveal-item meaning-item" id="revealMeaning"></div>
+        </div>
+        <div class="speak-row">
+          <button class="btn-speak" onclick="speakWord()">🔊 朗讀單字</button>
+          <button class="btn-speak" id="btnSpeakReading" onclick="speakReading()">🔊 朗讀假名</button>
+        </div>
+        <div class="action-row">
+          <button class="action-btn btn-unknown" id="btnUnknown" onclick="markUnknown()" disabled>
+            <span class="act-icon">✗</span>
+            <span class="act-label">還不會</span>
+            <span class="act-sub">下次再練</span>
+          </button>
+          <button class="action-btn btn-known" id="btnKnown" onclick="markKnown()" disabled>
+            <span class="act-icon">✓</span>
+            <span class="act-label">記住了！</span>
+            <span class="act-sub">今天完成</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 右：白板 -->
+      <div class="wb-col">
+        <div class="wb-header">
+          <span class="wb-title">✏ 練習白板</span>
+          <button class="wb-clear-btn" onclick="clearWhiteboard()">清除</button>
+        </div>
+        <div class="wb-toolbar">
+          <button class="wb-color active" data-color="#1a1a2e" onclick="setWbColor('#1a1a2e')" style="background:#e4e4ef;border:2px solid #666"></button>
+          <button class="wb-color" data-color="#f87171" onclick="setWbColor('#f87171')" style="background:#f87171"></button>
+          <button class="wb-color" data-color="#4ade80" onclick="setWbColor('#4ade80')" style="background:#4ade80"></button>
+          <button class="wb-color" data-color="#60a5fa" onclick="setWbColor('#60a5fa')" style="background:#60a5fa"></button>
+          <button class="wb-color" data-color="#fbbf24" onclick="setWbColor('#fbbf24')" style="background:#fbbf24"></button>
+          <div class="wb-sep"></div>
+          <button class="wb-tool-btn" id="btnErase" onclick="toggleErase()">◻ 橡皮</button>
+          <div class="wb-sep"></div>
+          <input type="range" min="2" max="20" value="4" oninput="setWbSize(this.value)" class="wb-size-range">
+          <span id="wbSizeLabel" class="wb-size-val">4px</span>
+        </div>
+        <div class="wb-canvas-wrap">
+          <canvas id="wbCanvas"></canvas>
+          <div class="wb-placeholder" id="wbPlaceholder">在這裡練習寫字</div>
         </div>
       </div>
     </div>
-
-    <!-- 語音 + 翻面列 -->
-    <div class="speak-row">
-      <button class="btn-speak" onclick="speak(current && current.word)">🔊 單字</button>
-      <button class="btn-speak" onclick="speak(current && current.hiragana)">🔊 假名</button>
-      <button class="btn-peek" id="btnPeek" onclick="flipCard()">👁 翻面查看答案</button>
-    </div>
-
-    <!-- 判斷按鈕 -->
-    <div class="action-row">
-      <button class="action-btn btn-unknown" id="btnUnknown" onclick="markUnknown()" disabled>
-        <span class="act-icon">✗</span>
-        <span class="act-label">還不會</span>
-        <span class="act-sub">暫存，下次再練</span>
-      </button>
-      <button class="action-btn btn-known" id="btnKnown" onclick="markKnown()" disabled>
-        <span class="act-icon">✓</span>
-        <span class="act-label">記住了！</span>
-        <span class="act-sub">今天不再出現</span>
-      </button>
-    </div>
-
   </section>
 
-  <!-- ── COMPLETE ── -->
+  <!-- ── 結束畫面 ── -->
   <section class="screen" id="screenComplete" style="display:none">
     <div class="complete-wrap">
       <div class="complete-kanji">完了</div>
       <h2 class="complete-title">練習完成！</h2>
       <p class="complete-sub" id="completeSub"></p>
       <div class="result-grid">
-        <div class="result-box known">
-          <div class="res-num" id="resKnown">0</div>
-          <div class="res-label">✓ 記住了</div>
-        </div>
-        <div class="result-box unknown">
-          <div class="res-num" id="resUnknown">0</div>
-          <div class="res-label">✗ 還不會</div>
-        </div>
-        <div class="result-box streak">
-          <div class="res-num" id="resStreak">0</div>
-          <div class="res-label">🔥 最長連勝</div>
-        </div>
-        <div class="result-box rate">
-          <div class="res-num" id="resRate">—</div>
-          <div class="res-label">正確率</div>
-        </div>
+        <div class="result-box known"><div class="res-num" id="resKnown">0</div><div class="res-label">✓ 記住了</div></div>
+        <div class="result-box unknown"><div class="res-num" id="resUnknown">0</div><div class="res-label">✗ 還不會</div></div>
+        <div class="result-box streak"><div class="res-num" id="resStreak">0</div><div class="res-label">🔥 最長連勝</div></div>
+        <div class="result-box rate"><div class="res-num" id="resRate">—</div><div class="res-label">正確率</div></div>
       </div>
       <div class="complete-btns">
         <button class="btn-retry" id="btnRetry" onclick="retryUnknown()">
-          🔄 只練「還不會」的<span id="unknownCount"></span>
+          🔄 練習剛才「還不會」的<span id="unknownCount"></span>
         </button>
-        <button class="btn-restart" onclick="backToSetup()">← 重新選擇</button>
+        <button class="btn-restart" onclick="backToSetup()">← 回主選單</button>
       </div>
     </div>
   </section>
