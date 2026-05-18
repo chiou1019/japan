@@ -1,4 +1,4 @@
-const CACHE = 'n5-v2';
+const CACHE = 'n5-v4';
 const ASSETS = ['/', '/static/style.css', '/static/script.js', '/static/manifest.json'];
 
 self.addEventListener('install', e => {

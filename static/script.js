@@ -1,21 +1,24 @@
 // ============================================================
-// N5 單字學習系統 — 後端 API + PWA 版本
+// N5 單字學習系統 — 後端 API + PWA
 // ============================================================
 
 // ── 全域狀態 ──
-let sessionWords   = [];
-let remainQueue    = [];
-let unknownList    = [];
-let current        = null;
-let showReading    = false;
-let showMeaning    = false;
-let selectedCount  = 15;
-let currentUser    = null;
-let practiceMode   = 'daily';
+let sessionWords  = [];
+let remainQueue   = [];
+let unknownList   = [];
+let current       = null;
+let showReading   = false;
+let showMeaning   = false;
+let selectedCount = 15;
+let currentUser   = null;
+let practiceMode  = 'daily';
 
-let sesKnown     = 0;
-let sesUnknown   = 0;
-let sesStreak    = 0;
+// 本輪每題的答題結果 {word: 'known'|'unknown'}
+let sessionProgress = {};
+
+let sesKnown    = 0;
+let sesUnknown  = 0;
+let sesStreak   = 0;
 let sesMaxStreak = 0;
 let gStats = JSON.parse(localStorage.getItem('n5_gstats') || '{"known":0,"unknown":0,"total":0}');
 
@@ -33,7 +36,7 @@ function applyTheme(t) {
 }
 function toggleTheme() { applyTheme(currentTheme === 'dark' ? 'light' : 'dark'); }
 
-// ── 語音狀態 ──
+// ── 語音 ──
 let ttsEnabled  = true;
 let ttsVoice    = null;
 let ttsRate     = 0.85;
@@ -75,13 +78,9 @@ function applyVoices(voices) {
   const sel = document.getElementById('voiceSelect');
   if (!sel) return;
   const ja = voices.filter(v => v.lang.startsWith('ja'));
-  if (ja.length === 0) {
-    sel.innerHTML = '<option value="-1">⚠ 未安裝日文語音</option>';
-  } else {
-    sel.innerHTML = ja.map((v, i) =>
-      `<option value="${i}" ${ttsVoice && v.name===ttsVoice.name?'selected':''}>${v.name}</option>`
-    ).join('');
-  }
+  sel.innerHTML = ja.length
+    ? ja.map((v, i) => `<option value="${i}" ${ttsVoice && v.name===ttsVoice.name?'selected':''}>${v.name}</option>`).join('')
+    : '<option value="-1">⚠ 未安裝日文語音</option>';
 }
 
 function speak(text) {
@@ -121,14 +120,14 @@ function flashBtn(id) {
 }
 
 // ════════════════════════════════════════
-// 帳號 API
+// 帳號
 // ════════════════════════════════════════
 
 function switchTab(tab) {
-  document.getElementById('loginForm').style.display    = tab==='login'    ? '' : 'none';
-  document.getElementById('registerForm').style.display = tab==='register' ? '' : 'none';
-  document.getElementById('tabLogin').classList.toggle('active',    tab==='login');
-  document.getElementById('tabRegister').classList.toggle('active', tab==='register');
+  document.getElementById('loginForm').style.display    = tab === 'login'    ? '' : 'none';
+  document.getElementById('registerForm').style.display = tab === 'register' ? '' : 'none';
+  document.getElementById('tabLogin').classList.toggle('active',    tab === 'login');
+  document.getElementById('tabRegister').classList.toggle('active', tab === 'register');
 }
 
 async function doLogin() {
@@ -137,7 +136,10 @@ async function doLogin() {
   const errEl    = document.getElementById('loginError');
   errEl.textContent = '';
   try {
-    const res  = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username,password}) });
+    const res  = await fetch('/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
     const data = await res.json();
     if (!data.ok) { errEl.textContent = data.error; return; }
     onLoginSuccess(data.username);
@@ -150,7 +152,10 @@ async function doRegister() {
   const errEl    = document.getElementById('registerError');
   errEl.textContent = '';
   try {
-    const res  = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username,password}) });
+    const res  = await fetch('/api/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
     const data = await res.json();
     if (!data.ok) { errEl.textContent = data.error; return; }
     onLoginSuccess(data.username);
@@ -165,9 +170,9 @@ function continueAsGuest() {
 }
 
 async function logout() {
-  try { await fetch('/api/logout', { method:'POST' }); } catch(e) {}
+  try { await fetch('/api/logout', { method: 'POST' }); } catch(e) {}
   currentUser = null;
-  document.getElementById('userInfo').style.display    = 'none';
+  document.getElementById('userInfo').style.display     = 'none';
   document.getElementById('userProgress').style.display = 'none';
   document.getElementById('wordPanels').style.display   = 'none';
   showScreen('screenLogin');
@@ -190,7 +195,7 @@ async function checkSession() {
   } catch(e) { showScreen('screenLogin'); }
 }
 
-// ── 載入主選單資料 ──
+// ── 載入主選單 ──
 async function loadSetupScreen() {
   if (!currentUser) return;
   try {
@@ -203,20 +208,17 @@ async function loadSetupScreen() {
     const knownWords   = await knownRes.json();
     const unknownWords = await unknownRes.json();
 
-    // 進度數字
     document.getElementById('progKnown').textContent   = stats.known;
     document.getElementById('progUnknown').textContent = stats.unknown;
     document.getElementById('progNew').textContent     = stats.new;
     document.getElementById('progTotal').textContent   = stats.total;
     document.getElementById('userProgress').style.display = 'block';
 
-    // 進度條
-    const pctK = (stats.known   / stats.total * 100).toFixed(1);
-    const pctU = (stats.unknown / stats.total * 100).toFixed(1);
+    const pctK = stats.total > 0 ? (stats.known   / stats.total * 100).toFixed(1) : 0;
+    const pctU = stats.total > 0 ? (stats.unknown / stats.total * 100).toFixed(1) : 0;
     document.getElementById('overallKnown').style.width   = pctK + '%';
     document.getElementById('overallUnknown').style.width = pctU + '%';
 
-    // 單字卡片區
     document.getElementById('knownBadgeCount').textContent   = stats.known;
     document.getElementById('unknownBadgeCount').textContent = stats.unknown;
     document.getElementById('wordPanels').style.display = 'block';
@@ -231,7 +233,10 @@ async function loadSetupScreen() {
 function renderWordGrid(gridId, words) {
   const grid = document.getElementById(gridId);
   if (!grid) return;
-  if (!words.length) { grid.innerHTML = '<div style="font-size:.8rem;color:var(--muted2);padding:.3rem 0">尚無單字</div>'; return; }
+  if (!words.length) {
+    grid.innerHTML = '<div style="font-size:.8rem;color:var(--muted2);padding:.3rem 0">尚無單字</div>';
+    return;
+  }
   grid.innerHTML = words.map(w => `
     <div class="word-chip" title="${w.meaning}">
       <span>${w.word}</span>
@@ -248,14 +253,38 @@ function togglePanel(panelId, btn) {
 }
 
 // ════════════════════════════════════════
+// 儲存進度到後端（單次 + batch）
+// ════════════════════════════════════════
+
+async function flushProgress() {
+  // 把 sessionProgress 送後端，清空後回傳
+  if (!currentUser || !Object.keys(sessionProgress).length) return;
+  const records = Object.entries(sessionProgress).map(([word, status]) => ({ word, status }));
+  try {
+    const res = await fetch('/api/save-progress/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        records,
+        mode:    practiceMode,
+        known:   sesKnown,
+        unknown: sesUnknown
+      })
+    });
+    if (!res.ok) console.warn('batch save failed:', await res.text());
+    else sessionProgress = {};  // 送成功才清空
+  } catch(e) { console.warn('batch save error:', e); }
+}
+
+// ════════════════════════════════════════
 // 學習邏輯
 // ════════════════════════════════════════
 
 function shuffle(arr) {
   const a = [...arr];
-  for (let i = a.length-1; i>0; i--) {
-    const j = Math.floor(Math.random()*(i+1));
-    [a[i],a[j]] = [a[j],a[i]];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
 }
@@ -301,11 +330,16 @@ async function startUnknownPractice() {
 
 function resetSession() {
   sesKnown = sesUnknown = sesStreak = sesMaxStreak = 0;
-  updateStatsBar(); updateStreakDisplay();
+  sessionProgress = {};
+  updateStatsBar();
+  updateStreakDisplay();
 }
 
 function nextCard() {
-  if (remainQueue.length === 0) { showComplete(); return; }
+  if (remainQueue.length === 0) {
+    showComplete();
+    return;
+  }
   current     = remainQueue.shift();
   showReading = false;
   showMeaning = false;
@@ -327,9 +361,9 @@ function renderCard(w) {
 function updateRevealUI() {
   const readingEl = document.getElementById('revealReading');
   const meaningEl = document.getElementById('revealMeaning');
-  const btnR = document.getElementById('btnRevealReading');
-  const btnM = document.getElementById('btnRevealMeaning');
-  const sep  = document.getElementById('revealSep');
+  const btnR      = document.getElementById('btnRevealReading');
+  const btnM      = document.getElementById('btnRevealMeaning');
+  const sep       = document.getElementById('revealSep');
 
   if (showReading) {
     readingEl.textContent = current?.hiragana || '';
@@ -337,8 +371,10 @@ function updateRevealUI() {
     btnR.classList.add('revealed');
     btnR.textContent = '🔊 ' + (current?.hiragana || '');
   } else {
-    readingEl.textContent = ''; readingEl.classList.remove('visible');
-    btnR.classList.remove('revealed'); btnR.textContent = '👁 顯示假名';
+    readingEl.textContent = '';
+    readingEl.classList.remove('visible');
+    btnR.classList.remove('revealed');
+    btnR.textContent = '👁 顯示假名';
   }
   if (showMeaning) {
     meaningEl.textContent = current?.meaning || '';
@@ -346,8 +382,10 @@ function updateRevealUI() {
     btnM.classList.add('revealed');
     btnM.textContent = '✓ ' + (current?.meaning || '');
   } else {
-    meaningEl.textContent = ''; meaningEl.classList.remove('visible');
-    btnM.classList.remove('revealed'); btnM.textContent = '👁 顯示中文';
+    meaningEl.textContent = '';
+    meaningEl.classList.remove('visible');
+    btnM.classList.remove('revealed');
+    btnM.textContent = '👁 顯示中文';
   }
   sep.textContent = (showReading && showMeaning) ? '／' : '';
   setActionBtns(showReading && showMeaning);
@@ -356,22 +394,11 @@ function updateRevealUI() {
 function revealReading() { showReading = true; speakReading(); updateRevealUI(); }
 function revealMeaning() { showMeaning = true; updateRevealUI(); }
 
-// 儲存進度到後端（非同步，不阻塞 UI）
-async function apiSaveProgress(word, status) {
-  if (!currentUser) return;
-  try {
-    await fetch('/api/save-progress', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({word, status})
-    });
-  } catch(e) {}
-}
-
 function markKnown() {
   sesKnown++; sesStreak++; sesMaxStreak = Math.max(sesMaxStreak, sesStreak);
   gStats.known++; gStats.total++;
   saveGStats();
-  apiSaveProgress(current.word, 'known');
+  sessionProgress[current.word] = 'known';
   animCard('anim-pop', 'anim-glow-green');
   updateStatsBar(); updateStreakDisplay();
   setTimeout(() => nextCard(), 280);
@@ -381,49 +408,17 @@ function markUnknown() {
   sesUnknown++; sesStreak = 0;
   gStats.unknown++; gStats.total++;
   saveGStats();
-  apiSaveProgress(current.word, 'unknown');
+  sessionProgress[current.word] = 'unknown';
   unknownList.push(current);
   animCard('anim-shake', 'anim-glow-red');
   updateStatsBar(); updateStreakDisplay();
   setTimeout(() => nextCard(), 320);
 }
 
-function retryUnknown() {
-  if (!unknownList.length) return;
-  sessionWords = shuffle([...unknownList]);
-  remainQueue  = [...sessionWords];
-  unknownList  = [];
-  practiceMode = 'retry';
-  showScreen('screenStudy');
-  document.getElementById('ttsBar').style.display = 'flex';
-  resetSession(); nextCard();
-}
-
-function backToSetup() {
-  document.getElementById('ttsBar').style.display = 'none';
-  showScreen('screenSetup');
-  if (currentUser) loadSetupScreen();
-}
-
-// ── 結束畫面 ──
+// ── 結束畫面：先存進度，再顯示 ──
 async function showComplete() {
   saveGStats();
-
-  // 批次儲存這輪結果
-  if (currentUser && (sesKnown + sesUnknown > 0)) {
-    const records = [
-      ...sessionWords
-        .filter(w => !unknownList.find(u => u.word === w.word))
-        .map(w => ({ word: w.word, status: 'known' })),
-      ...unknownList.map(w => ({ word: w.word, status: 'unknown' }))
-    ];
-    try {
-      await fetch('/api/save-progress/batch', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ records, mode: practiceMode, known: sesKnown, unknown: sesUnknown })
-      });
-    } catch(e) {}
-  }
+  await flushProgress();  // 確保存完才繼續
 
   showScreen('screenComplete');
   const total = sesKnown + sesUnknown;
@@ -434,13 +429,45 @@ async function showComplete() {
   document.getElementById('resRate').textContent     = rate + '%';
   document.getElementById('completeSub').textContent = `共練習 ${total} 次，正確率 ${rate}%`;
   document.getElementById('btnRetry').style.display  = unknownList.length > 0 ? '' : 'none';
-  document.getElementById('unknownCount').textContent = unknownList.length > 0 ? `（${unknownList.length} 個）` : '';
+  document.getElementById('unknownCount').textContent =
+    unknownList.length > 0 ? `（${unknownList.length} 個）` : '';
+}
+
+// ── 重練不會的：存完這輪再開新一輪 ──
+async function retryUnknown() {
+  if (!unknownList.length) return;
+
+  // 1. 先把這輪進度存到後端
+  await flushProgress();
+
+  // 2. 開新一輪
+  const retryWords = shuffle([...unknownList]);
+  sessionWords = retryWords;
+  remainQueue  = [...retryWords];
+  unknownList  = [];
+  practiceMode = 'retry';
+
+  // 3. 重設 session 計數（不清 sessionProgress，flushProgress 已清）
+  sesKnown = sesUnknown = sesStreak = sesMaxStreak = 0;
+  updateStatsBar(); updateStreakDisplay();
+
+  showScreen('screenStudy');
+  document.getElementById('ttsBar').style.display = 'flex';
+  nextCard();
+}
+
+async function backToSetup() {
+  // 離開練習時也確保進度有存
+  await flushProgress();
+  document.getElementById('ttsBar').style.display = 'none';
+  showScreen('screenSetup');
+  if (currentUser) loadSetupScreen();
 }
 
 // ── UI helpers ──
 function updateProgress() {
   const total = sessionWords.length;
-  const pct   = total > 0 ? Math.min((sesKnown/total)*100, 100) : 0;
+  const pct   = total > 0 ? Math.min((sesKnown / total) * 100, 100) : 0;
   document.getElementById('progFill').style.width  = pct + '%';
   document.getElementById('progLabel').textContent = `${sesKnown} / ${total}`;
 }
@@ -451,7 +478,7 @@ function updateQueueInfo() {
 }
 function updateStatsBar() {
   const total = sesKnown + sesUnknown;
-  const rate  = total > 0 ? Math.round(sesKnown/total*100) + '%' : '—';
+  const rate  = total > 0 ? Math.round(sesKnown / total * 100) + '%' : '—';
   document.getElementById('statKnown').textContent   = sesKnown;
   document.getElementById('statUnknown').textContent = sesUnknown;
   document.getElementById('statTotal').textContent   = gStats.total;
@@ -459,8 +486,12 @@ function updateStatsBar() {
 }
 function updateStreakDisplay() {
   const el = document.getElementById('streakDisplay');
-  if (sesStreak >= 3) { el.style.display='flex'; document.getElementById('streakCount').textContent=sesStreak; }
-  else { el.style.display='none'; }
+  if (sesStreak >= 3) {
+    el.style.display = 'flex';
+    document.getElementById('streakCount').textContent = sesStreak;
+  } else {
+    el.style.display = 'none';
+  }
 }
 function setActionBtns(enabled) {
   document.getElementById('btnKnown').disabled   = !enabled;
@@ -468,7 +499,7 @@ function setActionBtns(enabled) {
 }
 function showScreen(id) {
   ['screenLogin','screenSetup','screenStudy','screenComplete'].forEach(s => {
-    document.getElementById(s).style.display = s===id ? 'block' : 'none';
+    document.getElementById(s).style.display = s === id ? 'block' : 'none';
   });
 }
 function animCard(...classes) {
@@ -490,36 +521,31 @@ document.addEventListener('keydown', e => {
 });
 
 // ════════════════════════════════════════
-// 下載 App 提示
+// 安裝 App
 // ════════════════════════════════════════
 let deferredPrompt = null;
 
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredPrompt = e;
-  showInstallBtn();
-});
-
-function showInstallBtn() {
   const btn = document.getElementById('btnInstall');
   if (btn) btn.style.display = 'flex';
-}
+});
 
 async function installApp() {
   if (!deferredPrompt) {
-    // iOS 或已安裝：顯示說明
-    alert('iOS 請點 Safari 下方的「分享」→「加入主畫面」\nAndroid 請點瀏覽器右上角選單→「安裝應用程式」');
+    alert('iOS：Safari → 分享 → 加入主畫面\nAndroid：瀏覽器右上角選單 → 安裝應用程式');
     return;
   }
   deferredPrompt.prompt();
   const { outcome } = await deferredPrompt.userChoice;
   deferredPrompt = null;
   if (outcome === 'accepted') {
-    document.getElementById('btnInstall').style.display = 'none';
+    const btn = document.getElementById('btnInstall');
+    if (btn) btn.style.display = 'none';
   }
 }
 
-// 已安裝則隱藏按鈕
 window.addEventListener('appinstalled', () => {
   const btn = document.getElementById('btnInstall');
   if (btn) btn.style.display = 'none';
@@ -543,8 +569,8 @@ function initWhiteboardOnce() {
       canvas.addEventListener('mousemove',  wbDraw);
       canvas.addEventListener('mouseup',    wbEnd);
       canvas.addEventListener('mouseleave', wbEnd);
-      canvas.addEventListener('touchstart', e=>{e.preventDefault();wbStart(e.touches[0]);},{passive:false});
-      canvas.addEventListener('touchmove',  e=>{e.preventDefault();wbDraw(e.touches[0]); },{passive:false});
+      canvas.addEventListener('touchstart', e => { e.preventDefault(); wbStart(e.touches[0]); }, { passive: false });
+      canvas.addEventListener('touchmove',  e => { e.preventDefault(); wbDraw(e.touches[0]);  }, { passive: false });
       canvas.addEventListener('touchend',   wbEnd);
       window.addEventListener('resize', syncCanvasSize);
     }
@@ -553,59 +579,62 @@ function initWhiteboardOnce() {
 
 function syncCanvasSize() {
   const canvas = document.getElementById('wbCanvas');
-  if (!canvas||!wbCtx) return;
+  if (!canvas || !wbCtx) return;
   const wrap = canvas.parentElement;
-  const w = wrap.offsetWidth||300, h = wrap.offsetHeight||340;
+  const w = wrap.offsetWidth || 300, h = wrap.offsetHeight || 340;
   let img = null;
-  try { img = wbCtx.getImageData(0,0,canvas.width,canvas.height); } catch(e){}
-  canvas.width=w; canvas.height=h;
-  if (img) { try { wbCtx.putImageData(img,0,0); } catch(e){} }
+  try { img = wbCtx.getImageData(0, 0, canvas.width, canvas.height); } catch(e) {}
+  canvas.width = w; canvas.height = h;
+  if (img) { try { wbCtx.putImageData(img, 0, 0); } catch(e) {} }
 }
 
 function getPos(e, canvas) {
   const rect = canvas.getBoundingClientRect();
   return {
-    x: (e.clientX-rect.left)*(canvas.width/rect.width),
-    y: (e.clientY-rect.top)*(canvas.height/rect.height)
+    x: (e.clientX - rect.left) * (canvas.width  / rect.width),
+    y: (e.clientY - rect.top)  * (canvas.height / rect.height)
   };
 }
 function wbStart(e) {
-  isDrawing=true;
-  const ph=document.getElementById('wbPlaceholder');
-  if(ph) ph.style.display='none';
-  const pos=getPos(e,document.getElementById('wbCanvas'));
-  lastX=pos.x; lastY=pos.y;
+  isDrawing = true;
+  const ph = document.getElementById('wbPlaceholder');
+  if (ph) ph.style.display = 'none';
+  const pos = getPos(e, document.getElementById('wbCanvas'));
+  lastX = pos.x; lastY = pos.y;
 }
 function wbDraw(e) {
-  if(!isDrawing||!wbCtx) return;
-  const canvas=document.getElementById('wbCanvas');
-  const pos=getPos(e,canvas);
-  wbCtx.lineWidth   = wbMode==='erase'?wbSize*5:wbSize;
-  wbCtx.lineCap     = 'round'; wbCtx.lineJoin='round';
-  wbCtx.globalCompositeOperation = wbMode==='erase'?'destination-out':'source-over';
+  if (!isDrawing || !wbCtx) return;
+  const canvas = document.getElementById('wbCanvas');
+  const pos = getPos(e, canvas);
+  wbCtx.lineWidth   = wbMode === 'erase' ? wbSize * 5 : wbSize;
+  wbCtx.lineCap     = 'round'; wbCtx.lineJoin = 'round';
+  wbCtx.globalCompositeOperation = wbMode === 'erase' ? 'destination-out' : 'source-over';
   wbCtx.strokeStyle = wbColor;
-  wbCtx.beginPath(); wbCtx.moveTo(lastX,lastY); wbCtx.lineTo(pos.x,pos.y); wbCtx.stroke();
-  wbCtx.globalCompositeOperation='source-over';
-  lastX=pos.x; lastY=pos.y;
+  wbCtx.beginPath(); wbCtx.moveTo(lastX, lastY); wbCtx.lineTo(pos.x, pos.y); wbCtx.stroke();
+  wbCtx.globalCompositeOperation = 'source-over';
+  lastX = pos.x; lastY = pos.y;
 }
-function wbEnd() { isDrawing=false; }
+function wbEnd() { isDrawing = false; }
 function clearWhiteboard() {
-  if(!wbCtx) return;
-  const c=document.getElementById('wbCanvas');
-  wbCtx.clearRect(0,0,c.width,c.height);
-  const ph=document.getElementById('wbPlaceholder');
-  if(ph) ph.style.display='flex';
+  if (!wbCtx) return;
+  const c = document.getElementById('wbCanvas');
+  wbCtx.clearRect(0, 0, c.width, c.height);
+  const ph = document.getElementById('wbPlaceholder');
+  if (ph) ph.style.display = 'flex';
 }
 function setWbColor(color) {
-  wbColor=color; wbMode='draw';
-  document.querySelectorAll('.wb-color').forEach(b=>b.classList.remove('active'));
+  wbColor = color; wbMode = 'draw';
+  document.querySelectorAll('.wb-color').forEach(b => b.classList.remove('active'));
   document.querySelector(`.wb-color[data-color="${color}"]`)?.classList.add('active');
   document.getElementById('btnErase').classList.remove('active');
 }
-function setWbSize(size) { wbSize=parseInt(size); document.getElementById('wbSizeLabel').textContent=size+'px'; }
+function setWbSize(size) {
+  wbSize = parseInt(size);
+  document.getElementById('wbSizeLabel').textContent = size + 'px';
+}
 function toggleErase() {
-  wbMode=wbMode==='erase'?'draw':'erase';
-  document.getElementById('btnErase').classList.toggle('active', wbMode==='erase');
+  wbMode = wbMode === 'erase' ? 'draw' : 'erase';
+  document.getElementById('btnErase').classList.toggle('active', wbMode === 'erase');
 }
 
 // ════════════════════════════════════════
@@ -616,8 +645,6 @@ function init() {
   updateStatsBar();
   initTTS();
   checkSession();
-
-  // 如果是 PWA 模式且已在主畫面，隱藏安裝按鈕
   if (window.matchMedia('(display-mode: standalone)').matches) {
     const btn = document.getElementById('btnInstall');
     if (btn) btn.style.display = 'none';
