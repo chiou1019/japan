@@ -9,7 +9,7 @@ db.init_db()
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
 # ── SECRET_KEY 必須設定，否則 Render 重啟後 session cookie 失效 ──
-_key = os.environ.get('SECRET_KEY', 'dev-secret-key')
+_key = os.environ.get('SECRET_KEY')
 if not _key:
     raise RuntimeError("請在 Render 環境變數設定 SECRET_KEY（任意隨機字串）")
 app.secret_key = _key
